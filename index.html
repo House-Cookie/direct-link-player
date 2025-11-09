@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproductor de Video URL</title>
+    <style>
+        /* --- Estilos Generales --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* --- Contenedor Principal --- */
+        .container {
+            width: 100%;
+            max-width: 900px;
+            margin: 20px;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box; /* Asegura que el padding no afecte el ancho total */
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+
+        /* --- Área de Input y Botón --- */
+        .input-area {
+            display: flex;
+            flex-direction: column; /* Apilado en móviles por defecto */
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #videoUrl {
+            flex-grow: 1; /* El input toma el espacio disponible */
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        #loadButton {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #loadButton:hover {
+            background-color: #0056b3;
+        }
+
+        /* --- Contenedor del Video (para hacerlo responsivo) --- */
+        .video-wrapper {
+            position: relative;
+            /* Proporción 16:9 */
+            padding-bottom: 56.25%; 
+            height: 0;
+            background-color: #000;
+            border-radius: 6px;
+            overflow: hidden; /* Oculta cualquier desbordamiento */
+        }
+
+        #videoPlayer {
+            /* El video llena el contenedor wrapper */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- Mensaje de Error --- */
+        #errorMessage {
+            color: #d93025;
+            text-align: center;
+            margin: 10px 0;
+            display: none; /* Oculto por defecto */
+        }
+
+        /* --- Adaptación para pantallas más grandes (Desktop) --- */
+        @media (min-width: 600px) {
+            .input-area {
+                flex-direction: row; /* Lado a lado en pantallas grandes */
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Reproductor de Video Directo</h1>
+        
+        <div class="input-area">
+            <input type="text" id="videoUrl" placeholder="Pega la URL del video (.mp4, .webm)...">
+            <button id="loadButton">Reproducir</button>
+        </div>
+
+        <div id="errorMessage"></div>
+
+        <div class="video-wrapper">
+            <video id="videoPlayer" controls autoplay>
+                Tu navegador no soporta el tag de video.
+            </video>
+        </div>
+    </div>
+
+    <script>
+        // Espera a que todo el contenido de la página esté cargado
+        document.addEventListener("DOMContentLoaded", function() {
+            
+            // Obtiene los elementos del DOM
+            const videoUrlInput = document.getElementById("videoUrl");
+            const loadButton = document.getElementById("loadButton");
+            const videoPlayer = document.getElementById("videoPlayer");
+            const errorMessage = document.getElementById("errorMessage");
+
+            // Añade un evento 'click' al botón
+            loadButton.addEventListener("click", function() {
+                const videoUrl = videoUrlInput.value.trim();
+
+                // Oculta errores previos
+                errorMessage.style.display = "none";
+
+                // Validación simple
+                if (videoUrl === "") {
+                    errorMessage.textContent = "Por favor, ingresa una URL.";
+                    errorMessage.style.display = "block";
+                    return;
+                }
+
+                try {
+                    // Asigna la URL al atributo 'src' del video
+                    videoPlayer.src = videoUrl;
+                    
+                    // Carga y reproduce el video
+                    videoPlayer.load();
+                    videoPlayer.play().catch(error => {
+                        // La reproducción automática puede fallar (política del navegador)
+                        console.warn("La reproducción automática fue bloqueada.", error);
+                        errorMessage.textContent = "La reproducción automática está bloqueada. Presiona 'Play' manualmente.";
+                        errorMessage.style.display = "block";
+                    });
+
+                } catch (error) {
+                    console.error("Error al establecer la fuente del video:", error);
+                    errorMessage.textContent = "URL no válida o error al cargar.";
+                    errorMessage.style.display = "block";
+                }
+            });
+
+            // Manejador de errores del propio elemento <video>
+            videoPlayer.addEventListener("error", function(e) {
+                let errorMsg = "Error al cargar el video. ";
+                switch (e.target.error.code) {
+                    case e.target.error.MEDIA_ERR_ABORTED:
+                        errorMsg += "La carga fue abortada.";
+                        break;
+                    case e.target.error.MEDIA_ERR_NETWORK:
+                        errorMsg += "Error de red. Verifica tu conexión.";
+                        break;
+                    case e.target.error.MEDIA_ERR_DECODE:
+                        errorMsg += "Error de decodificación. El formato puede no ser compatible.";
+                        break;
+                    case e.target.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                        errorMsg += "Formato no soportado o URL incorrecta. Asegúrate que sea un enlace directo a un video.";
+                        break;
+                    default:
+                        errorMsg += "Ocurrió un error desconocido.";
+                }
+                errorMessage.textContent = errorMsg;
+                errorMessage.style.display = "block";
+            });
+
+        });
+    </script>
+
+</body>
+</html>
