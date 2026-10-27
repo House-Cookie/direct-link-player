@@ -1,543 +1,377 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>VideoStream</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dashjs/4.7.0/dash.all.min.js"></script>
-  <style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reproductor de video por URL</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --text: #15181d;
+    --muted: #5d6673;
+    --line: #d5d9e0;
+    --accent: #1f5eff;
+    --accent-text: #ffffff;
+    --screen: #0b0d11;
+    --err: #b3261e;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0a0a0f;
-      --surface: #111118;
-      --border: #1e1e2e;
-      --accent: #e8ff47;
-      --accent2: #ff4757;
-      --text: #f0f0f5;
-      --muted: #5a5a7a;
+      --bg: #101319;
+      --panel: #181c24;
+      --text: #eceff4;
+      --muted: #98a2b3;
+      --line: #2b313c;
+      --accent: #5b8cff;
+      --accent-text: #0b0d11;
+      --err: #ff8a80;
+      color-scheme: dark;
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 48px;
+  }
+  main { width: 100%; max-width: 960px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 20px; max-width: 62ch; }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px 20px 60px;
-      overflow-x: hidden;
-    }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type="text"] {
+    flex: 1 1 320px;
+    min-width: 0;
+    padding: 12px 14px;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  input[type="text"]:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  button {
+    font: inherit;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button:hover { filter: brightness(1.06); }
 
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.5;
-    }
+  .status { min-height: 1.5em; margin: 12px 0; font-size: .92rem; color: var(--muted); }
+  .status.error { color: var(--err); }
 
-    .wrapper {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      max-width: 900px;
-    }
+  .screen {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--screen);
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+  }
+  .screen video, .screen iframe {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: 0;
+    background: #000;
+  }
+  .placeholder { color: #8b94a3; text-align: center; padding: 16px; font-size: .95rem; }
 
-    header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 48px;
-    }
-
-    .logo-mark {
-      width: 42px; height: 42px;
-      background: var(--accent);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .logo-mark svg { width: 20px; height: 20px; }
-
-    h1 {
-      font-family: 'Syne', sans-serif;
-      font-size: 1.6rem; font-weight: 800;
-      letter-spacing: -0.03em;
-    }
-    h1 span { color: var(--accent); }
-
-    .tagline {
-      font-size: 0.72rem; color: var(--muted);
-      letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px;
-    }
-
-    .input-zone {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 28px 28px 22px;
-      margin-bottom: 28px;
-      transition: border-color 0.3s;
-    }
-    .input-zone:focus-within { border-color: var(--accent); }
-
-    .input-label {
-      font-size: 0.68rem; letter-spacing: 0.15em;
-      text-transform: uppercase; color: var(--muted);
-      margin-bottom: 12px; display: block;
-    }
-
-    .input-row {
-      display: flex; gap: 12px; align-items: stretch;
-    }
-
-    #url-input {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 18px;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.83rem;
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.25s, background 0.25s;
-      min-width: 0;
-    }
-    #url-input::placeholder { color: var(--muted); }
-    #url-input:focus { border-color: var(--accent); background: #0d0d14; }
-
-    #play-btn {
-      background: var(--accent);
-      color: #0a0a0f;
-      border: none; border-radius: 10px;
-      padding: 14px 28px;
-      font-family: 'Syne', sans-serif;
-      font-weight: 700; font-size: 0.9rem;
-      cursor: pointer;
-      display: flex; align-items: center; gap: 8px;
-      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
-      white-space: nowrap;
-    }
-    #play-btn:hover {
-      background: #d4eb2e;
-      box-shadow: 0 0 24px rgba(232,255,71,0.35);
-    }
-    #play-btn:active { transform: scale(0.97); }
-    #play-btn svg { width: 16px; height: 16px; }
-
-    .mime-row {
-      display: flex; align-items: center; gap: 12px;
-      margin-top: 16px;
-    }
-    .mime-row .input-label { margin-bottom: 0; white-space: nowrap; }
-
-    #mime-select {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 36px 8px 14px;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.78rem;
-      color: var(--text);
-      outline: none;
-      cursor: pointer;
-      transition: border-color 0.2s;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235a5a7a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-    }
-    #mime-select:focus { border-color: var(--accent); }
-    #mime-select option { background: #111118; }
-
-    .hint {
-      margin-top: 12px;
-      font-size: 0.67rem;
-      color: var(--muted);
-      line-height: 1.7;
-    }
-    .hint b { color: var(--accent); font-weight: 500; }
-
-    .formats {
-      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px;
-    }
-    .fmt-tag {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 3px 9px;
-      font-size: 0.62rem; letter-spacing: 0.1em;
-      color: var(--muted); text-transform: uppercase;
-    }
-
-    .error-msg {
-      display: none; align-items: flex-start; gap: 10px;
-      background: rgba(255,71,87,0.08);
-      border: 1px solid rgba(255,71,87,0.3);
-      border-radius: 10px;
-      padding: 14px 18px;
-      font-size: 0.78rem; color: var(--accent2);
-      margin-bottom: 20px; line-height: 1.6;
-    }
-    .error-msg.show { display: flex; }
-    .error-msg svg { flex-shrink: 0; margin-top: 2px; }
-
-    .player-zone {
-      display: none; flex-direction: column;
-      animation: fadeUp 0.4s ease forwards;
-    }
-    .player-zone.show { display: flex; }
-
-    @keyframes fadeUp {
-      from { opacity:0; transform:translateY(20px); }
-      to   { opacity:1; transform:translateY(0); }
-    }
-
-    .player-header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 14px 20px;
-      background: var(--surface);
-      border: 1px solid var(--border); border-bottom: none;
-      border-radius: 14px 14px 0 0;
-    }
-
-    .player-title {
-      font-size: 0.7rem; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--muted);
-      display: flex; align-items: center; gap: 8px;
-    }
-
-    .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--accent);
-      animation: pulse 1.8s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%,100% { opacity:1; transform:scale(1); }
-      50% { opacity:0.5; transform:scale(0.7); }
-    }
-
-    #close-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px; color: var(--muted);
-      padding: 5px 12px;
-      font-family: 'DM Mono', monospace; font-size: 0.7rem;
-      cursor: pointer; transition: color 0.2s, border-color 0.2s;
-    }
-    #close-btn:hover { color: var(--accent2); border-color: var(--accent2); }
-
-    .video-wrapper {
-      background: #000;
-      border: 1px solid var(--border); border-top: none;
-      border-radius: 0 0 14px 14px;
-      overflow: hidden;
-    }
-
-    video {
-      width: 100%; display: block;
-      max-height: 540px; background: #000;
-    }
-
-    .video-info {
-      margin-top: 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 18px;
-      display: flex; align-items: flex-start; gap: 12px;
-    }
-    .video-info-icon {
-      width: 34px; height: 34px;
-      background: rgba(232,255,71,0.08);
-      border-radius: 8px; display: flex;
-      align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .video-info-icon svg { width: 15px; height: 15px; }
-    .video-url-text {
-      font-size: 0.73rem; color: var(--muted);
-      word-break: break-all; line-height: 1.6;
-    }
-    .video-url-text strong { display: block; color: var(--text); font-size: 0.76rem; margin-bottom: 2px; }
-
-    footer {
-      margin-top: 60px; text-align: center;
-      font-size: 0.63rem; color: var(--muted);
-      letter-spacing: 0.08em; text-transform: uppercase;
-    }
-  </style>
+  details { margin-top: 20px; color: var(--muted); font-size: .9rem; }
+  summary { cursor: pointer; color: var(--text); }
+  details ul { padding-left: 20px; max-width: 70ch; }
+  code { background: var(--panel); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px; font-size: .85em; }
+</style>
 </head>
 <body>
-<div class="wrapper">
+<main>
+  <h1>Reproductor de video por URL</h1>
+  <p class="sub">Pega el enlace de un video, pulsa Reproducir y se verá aquí mismo, sin descargarlo.</p>
 
-  <header>
-    <div class="logo-mark">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="5 3 19 12 5 21 5 3"/>
-      </svg>
-    </div>
-    <div>
-      <h1>Video<span>Stream</span></h1>
-      <p class="tagline">Reproductor directo de URL</p>
-    </div>
-  </header>
+  <form id="form">
+    <input type="text" id="url" placeholder="https://ejemplo.com/video.mp4 o enlace de YouTube, Vimeo…" autocomplete="off" spellcheck="false" aria-label="URL del video">
+    <button type="submit" class="primary">Reproducir</button>
+    <button type="button" id="clear">Limpiar</button>
+  </form>
 
-  <div class="input-zone">
-    <label class="input-label" for="url-input">— Pega la URL del video</label>
-    <div class="input-row">
-      <input
-        id="url-input"
-        type="text"
-        placeholder="https://ejemplo.com/stream  ·  /video.mp4  ·  cualquier URL directa"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <button id="play-btn" onclick="loadVideo()">
-        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Reproducir
-      </button>
-    </div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
 
-    <div class="mime-row">
-      <label class="input-label" for="mime-select">Tipo de video:</label>
-      <select id="mime-select">
-        <option value="">— Auto detectar</option>
-        <option value="video/mp4">MP4</option>
-        <option value="video/webm">WebM</option>
-        <option value="video/ogg">OGG / OGV</option>
-        <option value="video/x-matroska">MKV</option>
-        <option value="video/quicktime">MOV</option>
-        <option value="video/x-msvideo">AVI</option>
-        <option value="application/x-mpegURL">HLS — m3u8</option>
-        <option value="application/dash+xml">DASH — mpd</option>
-        <option value="video/mp2t">TS / MPEG-2</option>
-        <option value="video/3gpp">3GP</option>
-      </select>
-    </div>
-
-    <p class="hint">
-      Si la URL <b>no tiene extensión</b>, selecciona el tipo manualmente arriba.<br>
-      Soporta streams HLS/DASH, servidores que sirven video sin extensión y URLs con parámetros.
-    </p>
-
-    <div class="formats">
-      <span class="fmt-tag">MP4</span>
-      <span class="fmt-tag">WebM</span>
-      <span class="fmt-tag">OGG</span>
-      <span class="fmt-tag">AVI</span>
-      <span class="fmt-tag">MOV</span>
-      <span class="fmt-tag">MKV</span>
-      <span class="fmt-tag">HLS m3u8</span>
-      <span class="fmt-tag">DASH mpd</span>
-      <span class="fmt-tag">TS</span>
-      <span class="fmt-tag">Sin extensión ✓</span>
-    </div>
+  <div class="screen" id="screen">
+    <div class="placeholder">El video aparecerá aquí</div>
   </div>
 
-  <div class="error-msg" id="error-msg">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-    <span id="error-text"></span>
-  </div>
+  <details>
+    <summary>¿Qué enlaces funcionan?</summary>
+    <ul>
+      <li><strong>Archivos directos:</strong> .mp4, .webm, .ogv, .mov, .m4v y .mkv (según el navegador). Los .avi, .flv y .wmv casi nunca se reproducen en navegadores.</li>
+      <li><strong>Streaming:</strong> .m3u8 (HLS) y .mpd (DASH).</li>
+      <li><strong>Plataformas:</strong> YouTube, Vimeo, Dailymotion, Twitch, Streamable, TikTok, Facebook y Google Drive se convierten solos a su reproductor incrustado.</li>
+      <li><strong>Enlaces sin extensión:</strong> se prueban primero como video directo y, si falla, se intentan incrustar como página. También puedes pegar un código <code>&lt;iframe&gt;</code> completo.</li>
+      <li><strong>Limitaciones:</strong> algunos servidores bloquean la reproducción desde otras páginas (CORS, protección anti-hotlink o X-Frame-Options). Si usas la página con https, los videos http se bloquean. Si YouTube da error al abrir el archivo localmente, sírvelo con un servidor (por ejemplo <code>python -m http.server</code>).</li>
+    </ul>
+  </details>
+</main>
 
-  <div class="player-zone" id="player-zone">
-    <div class="player-header">
-      <div class="player-title">
-        <div class="dot"></div>
-        Reproduciendo
-      </div>
-      <button id="close-btn" onclick="closePlayer()">✕ Cerrar</button>
-    </div>
-    <div class="video-wrapper">
-      <video id="video-player" controls autoplay playsinline>
-        Tu navegador no soporta reproducción de video HTML5.
-      </video>
-    </div>
-    <div class="video-info">
-      <div class="video-info-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#e8ff47" stroke-width="2" stroke-linecap="round">
-          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
-      </div>
-      <div class="video-url-text">
-        <strong id="displayed-type">Fuente</strong>
-        <span id="displayed-url"></span>
-      </div>
-    </div>
-  </div>
-
-  <footer>VideoStream · sin descarga · HLS · DASH · MP4 · WebM · URLs sin extensión · todos los navegadores modernos</footer>
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js"></script>
 <script>
-  const EXT_MAP = {
-    mp4:'video/mp4', m4v:'video/mp4', m4p:'video/mp4',
-    webm:'video/webm',
-    ogg:'video/ogg', ogv:'video/ogg',
-    mkv:'video/x-matroska',
-    mov:'video/quicktime', qt:'video/quicktime',
-    avi:'video/x-msvideo',
-    m3u8:'application/x-mpegURL',
-    mpd:'application/dash+xml',
-    ts:'video/mp2t',
-    '3gp':'video/3gpp',
-    flv:'video/x-flv',
-    wmv:'video/x-ms-wmv',
-  };
+(function () {
+  const form = document.getElementById('form');
+  const input = document.getElementById('url');
+  const screen = document.getElementById('screen');
+  const statusEl = document.getElementById('status');
+  const PLACEHOLDER = '<div class="placeholder">El video aparecerá aquí</div>';
 
-  let hlsInstance = null;
-  let dashInstance = null;
+  let hls = null, dash = null, probeTimer = null;
 
-  function getExtFromUrl(url) {
-    try {
-      const path = new URL(url).pathname;
-      const seg = path.split('/').pop();
-      const dot = seg.lastIndexOf('.');
-      if (dot !== -1) return seg.slice(dot + 1).toLowerCase();
-    } catch {}
-    return '';
+  const DIRECT_RE = /\.(mp4|m4v|webm|ogv|ogg|mov|mkv|avi|3gp|flv|wmv|ts)(?=$|[?#&])/i;
+  const HLS_RE = /\.m3u8(?=$|[?#&])/i;
+  const DASH_RE = /\.mpd(?=$|[?#&])/i;
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg || '';
+    statusEl.classList.toggle('error', !!isError);
   }
 
-  function detectMime(url, manual) {
-    if (manual) return manual;
-    const ext = getExtFromUrl(url);
-    // Detectar HLS/DASH por fragmentos en la URL también
-    if (url.includes('.m3u8') || url.includes('/hls/') || url.includes('/live/')) return 'application/x-mpegURL';
-    if (url.includes('.mpd') || url.includes('/dash/')) return 'application/dash+xml';
-    return EXT_MAP[ext] || '';
+  function cleanup() {
+    clearTimeout(probeTimer);
+    if (hls) { hls.destroy(); hls = null; }
+    if (dash) { dash.reset(); dash = null; }
+    screen.innerHTML = '';
   }
 
-  function showError(msg) {
-    const el = document.getElementById('error-msg');
-    document.getElementById('error-text').innerHTML = msg;
-    el.classList.add('show');
-  }
-  function hideError() {
-    document.getElementById('error-msg').classList.remove('show');
+  function reset() {
+    cleanup();
+    screen.innerHTML = PLACEHOLDER;
+    setStatus('');
   }
 
-  function destroyPrevious() {
-    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-    if (dashInstance) { try { dashInstance.reset(); } catch(e){} dashInstance = null; }
-    const v = document.getElementById('video-player');
-    v.pause();
-    v.removeAttribute('src');
-    // Limpiar sources
-    while (v.firstChild) v.removeChild(v.firstChild);
-    v.load();
+  // Si el usuario pega un <iframe ...>, extrae el src
+  function extractIframeSrc(text) {
+    const m = text.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+    return m ? m[1] : null;
   }
 
-  function loadVideo() {
-    hideError();
-    const url = document.getElementById('url-input').value.trim();
-    const manualMime = document.getElementById('mime-select').value;
+  // Convierte enlaces de plataformas conocidas a su URL de incrustación
+  function toEmbed(u) {
+    const host = u.hostname.replace(/^www\.|^m\./, '');
+    const path = u.pathname;
+    let m;
 
-    if (!url) {
-      showError('Ingresa una URL antes de reproducir.');
-      document.getElementById('url-input').focus();
-      return;
+    if (host === 'youtu.be') {
+      return 'https://www.youtube-nocookie.com/embed/' + path.slice(1);
     }
-
-    try { new URL(url); } catch {
-      showError('La URL no parece válida. ¿Incluiste <b>https://</b> al inicio?');
-      return;
-    }
-
-    destroyPrevious();
-
-    const mime = detectMime(url, manualMime);
-    const video = document.getElementById('video-player');
-
-    // — HLS —
-    if (mime === 'application/x-mpegURL') {
-      if (Hls.isSupported()) {
-        hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
-        hlsInstance.loadSource(url);
-        hlsInstance.attachMedia(video);
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
-        hlsInstance.on(Hls.Events.ERROR, (_, d) => {
-          if (d.fatal) showError('Error cargando stream HLS. Verifica la URL o selecciona otro tipo.');
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = url;
-        video.play().catch(() => {});
-      } else {
-        showError('Tu navegador no soporta HLS. Prueba en Chrome o Firefox actualizado.');
-        return;
+    if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+      if (path === '/watch' && u.searchParams.get('v')) {
+        return 'https://www.youtube-nocookie.com/embed/' + u.searchParams.get('v');
+      }
+      if ((m = path.match(/^\/(shorts|embed|live|v)\/([\w-]+)/))) {
+        return 'https://www.youtube-nocookie.com/embed/' + m[2];
       }
     }
-    // — DASH —
-    else if (mime === 'application/dash+xml') {
-      dashInstance = dashjs.MediaPlayer().create();
-      dashInstance.initialize(video, url, true);
-      dashInstance.on(dashjs.MediaPlayer.events.ERROR, () => {
-        showError('Error cargando stream DASH/MPD. Verifica la URL.');
+    if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+      if ((m = path.match(/\/(\d+)(?:\/([a-f0-9]+))?/))) {
+        return 'https://player.vimeo.com/video/' + m[1] + (m[2] ? '?h=' + m[2] : '');
+      }
+    }
+    if (host === 'dailymotion.com' || host === 'dai.ly') {
+      if ((m = path.match(/\/video\/([\w]+)/)) || (m = path.match(/^\/([\w]+)$/))) {
+        return 'https://www.dailymotion.com/embed/video/' + m[1];
+      }
+    }
+    if (host === 'twitch.tv' || host === 'clips.twitch.tv') {
+      const parent = location.hostname || 'localhost';
+      if ((m = path.match(/^\/videos\/(\d+)/))) {
+        return 'https://player.twitch.tv/?video=' + m[1] + '&parent=' + parent;
+      }
+      if (host === 'clips.twitch.tv' && path.length > 1) {
+        return 'https://clips.twitch.tv/embed?clip=' + path.slice(1) + '&parent=' + parent;
+      }
+      if ((m = path.match(/^\/([\w]+)\/?$/))) {
+        return 'https://player.twitch.tv/?channel=' + m[1] + '&parent=' + parent;
+      }
+    }
+    if (host === 'streamable.com' && (m = path.match(/^\/(?:e\/)?([\w]+)/))) {
+      return 'https://streamable.com/e/' + m[1];
+    }
+    if (host === 'tiktok.com' && (m = path.match(/\/video\/(\d+)/))) {
+      return 'https://www.tiktok.com/embed/v2/' + m[1];
+    }
+    if ((host === 'facebook.com' || host === 'fb.watch') && /video|watch|reel|fb\.watch/.test(u.href)) {
+      return 'https://www.facebook.com/plugins/video.php?show_text=false&href=' + encodeURIComponent(u.href);
+    }
+    if (host === 'drive.google.com' && (m = path.match(/\/file\/d\/([\w-]+)/))) {
+      return 'https://drive.google.com/file/d/' + m[1] + '/preview';
+    }
+    return null;
+  }
+
+  function mountIframe(src) {
+    cleanup();
+    const f = document.createElement('iframe');
+    f.src = src;
+    f.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    f.title = 'Video incrustado';
+    screen.appendChild(f);
+  }
+
+  function mountVideo(src, { onFail } = {}) {
+    cleanup();
+    const v = document.createElement('video');
+    v.controls = true;
+    v.autoplay = true;
+    v.playsInline = true;
+    v.preload = 'metadata';
+    v.referrerPolicy = 'no-referrer';
+    screen.appendChild(v);
+
+    let settled = false;
+    const fail = (msg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(probeTimer);
+      if (onFail) onFail(msg); else setStatus(msg, true);
+    };
+    const ok = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(probeTimer);
+      setStatus('Reproduciendo.');
+    };
+
+    v.addEventListener('loadedmetadata', ok);
+    v.addEventListener('playing', ok);
+    v.addEventListener('error', () => {
+      const codes = {
+        2: 'Error de red al cargar el video.',
+        3: 'El navegador no pudo decodificar el video.',
+        4: 'Formato no compatible o enlace que no es un video.'
+      };
+      const code = v.error && v.error.code;
+      fail(codes[code] || 'No se pudo cargar el video.');
+    });
+    // Si el navegador bloquea el autoplay con sonido, el usuario puede pulsar play en los controles
+    v.addEventListener('canplay', () => { v.play().catch(() => {}); }, { once: true });
+
+    v.src = src;
+    probeTimer = setTimeout(() => fail('El video tardó demasiado en responder.'), 10000);
+    return v;
+  }
+
+  function mountHls(src) {
+    cleanup();
+    const v = document.createElement('video');
+    v.controls = true; v.autoplay = true; v.playsInline = true;
+    v.referrerPolicy = 'no-referrer';
+    screen.appendChild(v);
+
+    if (window.Hls && Hls.isSupported()) {
+      hls = new Hls();
+      hls.loadSource(src);
+      hls.attachMedia(v);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { setStatus('Reproduciendo (HLS).'); v.play().catch(() => {}); });
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (d.fatal) setStatus('No se pudo cargar el stream HLS (posible bloqueo CORS o enlace caído).', true);
       });
+    } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+      v.src = src;
+      setStatus('Reproduciendo (HLS nativo).');
+    } else {
+      setStatus('Tu navegador no soporta HLS.', true);
     }
-    // — Todo lo demás (MP4, WebM, sin extensión, etc.) —
-    else {
-      if (mime) {
-        // Crear <source> con tipo explícito
-        const src = document.createElement('source');
-        src.src = url;
-        src.type = mime;
-        video.appendChild(src);
-      } else {
-        // Sin tipo conocido: asignar directo y dejar al navegador intentarlo
-        video.src = url;
+  }
+
+  function mountDash(src) {
+    cleanup();
+    const v = document.createElement('video');
+    v.controls = true; v.autoplay = true; v.playsInline = true;
+    screen.appendChild(v);
+    if (window.dashjs) {
+      dash = dashjs.MediaPlayer().create();
+      dash.on('error', () => setStatus('No se pudo cargar el stream DASH (posible bloqueo CORS o enlace caído).', true));
+      dash.initialize(v, src, true);
+      setStatus('Reproduciendo (DASH).');
+    } else {
+      setStatus('No se pudo cargar la librería DASH.', true);
+    }
+  }
+
+  function play(raw) {
+    raw = (raw || '').trim();
+    if (!raw) { setStatus('Escribe o pega una URL primero.', true); input.focus(); return; }
+
+    const fromIframe = extractIframeSrc(raw);
+    if (fromIframe) {
+      setStatus('Cargando video incrustado…');
+      mountIframe(fromIframe);
+      return;
+    }
+
+    let url;
+    try {
+      url = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : 'https://' + raw);
+    } catch (e) {
+      setStatus('La URL no es válida.', true);
+      return;
+    }
+
+    setStatus('Cargando…');
+
+    const embed = toEmbed(url);
+    if (embed) { mountIframe(embed); setStatus('Cargando reproductor incrustado…'); return; }
+
+    if (HLS_RE.test(url.href)) { mountHls(url.href); return; }
+    if (DASH_RE.test(url.href)) { mountDash(url.href); return; }
+
+    if (DIRECT_RE.test(url.href)) {
+      if (/\.(avi|flv|wmv)(?=$|[?#&])/i.test(url.href)) {
+        setStatus('Los formatos AVI, FLV y WMV casi nunca los reproduce un navegador; se intentará igualmente…');
       }
-      video.load();
-      video.play().catch(() => {});
-
-      video.onerror = () => {
-        showError(
-          'No se pudo reproducir el video. Posibles causas:<br>' +
-          '· El servidor bloquea acceso externo (política CORS)<br>' +
-          '· Formato no soportado por este navegador<br>' +
-          '· Prueba seleccionando el <b>Tipo de video</b> manualmente'
-        );
-      };
+      mountVideo(url.href);
+      return;
     }
 
-    // Etiqueta de tipo
-    let typeLabel = 'Auto';
-    if (mime) {
-      const known = {
-        'video/mp4':'MP4','video/webm':'WebM','video/ogg':'OGG',
-        'video/x-matroska':'MKV','video/quicktime':'MOV','video/x-msvideo':'AVI',
-        'application/x-mpegURL':'HLS','application/dash+xml':'DASH',
-        'video/mp2t':'TS','video/3gpp':'3GP'
-      };
-      typeLabel = known[mime] || mime.split('/')[1].toUpperCase();
-    }
-
-    document.getElementById('displayed-type').textContent = 'Fuente · ' + typeLabel;
-    document.getElementById('displayed-url').textContent = url;
-    document.getElementById('player-zone').classList.add('show');
-    setTimeout(() => {
-      document.getElementById('player-zone').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    // Sin extensión: probar como video directo y, si falla, como página incrustada
+    setStatus('Enlace sin extensión de video: probando como video directo…');
+    mountVideo(url.href, {
+      onFail: () => {
+        setStatus('No es un video directo. Intentando incrustar la página… (si queda en blanco, el sitio no permite ser incrustado)');
+        mountIframe(url.href);
+      }
+    });
   }
 
-  function closePlayer() {
-    destroyPrevious();
-    document.getElementById('player-zone').classList.remove('show');
-    document.getElementById('url-input').value = '';
-    document.getElementById('mime-select').value = '';
-    hideError();
-    document.getElementById('url-input').focus();
-  }
+  form.addEventListener('submit', (e) => { e.preventDefault(); play(input.value); });
+  document.getElementById('clear').addEventListener('click', () => { input.value = ''; reset(); input.focus(); });
 
-  document.getElementById('url-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadVideo();
-  });
+  // Permite abrir la página con ?url=... o #url
+  const preset = new URLSearchParams(location.search).get('url');
+  if (preset) { input.value = preset; play(preset); }
+})();
 </script>
 </body>
 </html>
